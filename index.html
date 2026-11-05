@@ -105,7 +105,7 @@
     </div>
 
     <button class="btn-submit" id="btn-submit" onclick="sendOrderData()">บันทึกออเดอร์ลงระบบ</button>
-    <p style="text-align: center; color: #aaa; font-size: 12px; margin: 14px 0 0;">เวอร์ชันฟอร์ม v9</p>
+    <p style="text-align: center; color: #aaa; font-size: 12px; margin: 14px 0 0;">เวอร์ชันฟอร์ม v10</p>
 </div>
 
 <div class="card" id="result-card" style="display: none;">
@@ -116,7 +116,7 @@
     <button class="btn-submit" id="btn-perm" style="display: none; background-color: #007bff; margin-top: 10px;" onclick="requestChatPermission()">อนุญาตให้ส่งข้อความเข้าแชท</button>
     <p id="send-hint" style="display: none; font-size: 13px; color: #888; margin: 10px 0 0;"></p>
     <button class="btn-submit" style="background-color: #6c757d; margin-top: 10px;" onclick="finishForm()">ปิด</button>
-    <p style="text-align: center; color: #aaa; font-size: 12px; margin: 14px 0 0;">เวอร์ชันฟอร์ม v9</p>
+    <p style="text-align: center; color: #aaa; font-size: 12px; margin: 14px 0 0;">เวอร์ชันฟอร์ม v10</p>
 </div>
 
 <script>
@@ -232,7 +232,7 @@
         await updateSendOptions();
     }
 
-    // ตรวจว่าส่งสรุปเข้าแชทได้หรือไม่ แล้วแสดงปุ่ม/คำอธิบายให้ตรงสาเหตุ
+    // แสดงปุ่มส่งสรุปเข้าแชท (ไม่ใช้ isApiAvailable เพราะ LIFF ไม่รองรับชื่อ sendMessages) และบอกสถานะสิทธิ์
     async function updateSendOptions() {
         const sendBtn = document.getElementById('btn-send-chat');
         const permBtn = document.getElementById('btn-perm');
@@ -241,27 +241,26 @@
         permBtn.style.display = 'none';
         hint.style.display = 'none';
 
-        let ctxType = '-', perm = '-';
+        let inClient = false, ctxType = '-', perm = '-';
+        try { inClient = liff.isInClient(); } catch (e) {}
         try { ctxType = (liff.getContext() || {}).type || '-'; } catch (e) {}
         try { if (liff.permission) perm = (await liff.permission.query('chat_message.write')).state; } catch (e) { perm = 'error'; }
 
         let msg = '';
-        if (!liff.isInClient()) {
+        if (!inClient) {
             msg = 'ส่งเข้าแชทได้เฉพาะเมื่อเปิดฟอร์มจากในแอป LINE';
-        } else if (liff.isApiAvailable('sendMessages')) {
-            sendBtn.style.display = 'block';
-            return;
-        } else if (perm === 'prompt') {
-            permBtn.style.display = 'block';
-            msg = 'ต้องกดอนุญาตสิทธิ์ส่งข้อความก่อน แล้วปุ่มส่งสรุปจะขึ้น';
-        } else if (perm === 'unavailable') {
-            msg = 'LIFF นี้ยังไม่ได้เปิดสิทธิ์ chat_message.write ในคอนโซล (ติ๊กแล้วกด Update)';
-        } else if (!['utou', 'room', 'group'].includes(ctxType)) {
-            msg = 'ฟอร์มนี้ไม่ได้ถูกเปิดจากหน้าแชท ให้เปิดจากเมนูหรือปุ่มในแชทโดยตรง';
         } else {
-            msg = 'ยังส่งเข้าแชทไม่ได้';
+            sendBtn.style.display = 'block';
+            if (perm === 'prompt') {
+                permBtn.style.display = 'block';
+                msg = 'ถ้าส่งไม่ได้ ให้กดอนุญาตสิทธิ์ส่งข้อความก่อน';
+            } else if (perm === 'unavailable') {
+                msg = 'LIFF นี้ยังไม่ได้เปิดสิทธิ์ chat_message.write ในคอนโซล (ติ๊กแล้วกด Update)';
+            } else if (!['utou', 'room', 'group'].includes(ctxType)) {
+                msg = 'ฟอร์มนี้อาจไม่ได้ถูกเปิดจากหน้าแชท ถ้าส่งไม่ได้ให้เปิดจากเมนูหรือปุ่มในแชทโดยตรง';
+            }
         }
-        hint.textContent = `${msg} (เปิดจาก: ${ctxType} | สิทธิ์ส่งข้อความ: ${perm})`;
+        hint.textContent = `${msg} (เปิดจาก: ${ctxType} | สิทธิ์ส่งข้อความ: ${perm})`.trim();
         hint.style.display = 'block';
     }
 
