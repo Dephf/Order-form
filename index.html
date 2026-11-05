@@ -112,6 +112,7 @@
     <pre id="summary-text" style="white-space: pre-wrap; word-break: break-word; background: #f8f9fa; border: 1px solid #e1e5e8; border-radius: 6px; padding: 12px; font-family: inherit; font-size: 14px; line-height: 1.5; margin: 0 0 12px;"></pre>
     <button class="btn-submit" id="btn-copy" style="margin-top: 0;" onclick="copySummary()">คัดลอกข้อความ</button>
     <button class="btn-submit" id="btn-send-chat" style="display: none; background-color: #007bff; margin-top: 10px;" onclick="sendSummaryToChat()">ส่งสรุปเข้าแชท</button>
+    <button class="btn-submit" id="btn-perm" style="display: none; background-color: #007bff; margin-top: 10px;" onclick="requestChatPermission()">อนุญาตให้ส่งข้อความเข้าแชท</button>
     <p id="send-hint" style="display: none; font-size: 13px; color: #888; margin: 10px 0 0;"></p>
     <button class="btn-submit" style="background-color: #6c757d; margin-top: 10px;" onclick="finishForm()">ปิด</button>
 </div>
@@ -220,21 +221,51 @@
 
     // หน้าสรุปหลังบันทึกสำเร็จ
     let lastSummary = '';
-    function showResult(text) {
+    async function showResult(text) {
         lastSummary = text;
         document.getElementById('summary-text').textContent = text;
         document.getElementById('form-card').style.display = 'none';
         document.getElementById('result-card').style.display = 'block';
-        const hint = document.getElementById('send-hint');
-        if (liff.isInClient() && liff.isApiAvailable('sendMessages')) {
-            document.getElementById('btn-send-chat').style.display = 'block';
-        } else {
-            hint.style.display = 'block';
-            hint.textContent = liff.isInClient()
-                ? 'ส่งเข้าแชทยังไม่ได้: ยังไม่ได้เปิดสิทธิ์ chat_message.write ใน LIFF หรือยังไม่ได้กดอนุญาตสิทธิ์นี้ในแอป LINE'
-                : 'ส่งเข้าแชทได้เฉพาะเมื่อเปิดฟอร์มจากในแอป LINE';
-        }
         window.scrollTo(0, 0);
+        await updateSendOptions();
+    }
+
+    // ตรวจว่าส่งสรุปเข้าแชทได้หรือไม่ แล้วแสดงปุ่ม/คำอธิบายให้ตรงสาเหตุ
+    async function updateSendOptions() {
+        const sendBtn = document.getElementById('btn-send-chat');
+        const permBtn = document.getElementById('btn-perm');
+        const hint = document.getElementById('send-hint');
+        sendBtn.style.display = 'none';
+        permBtn.style.display = 'none';
+        hint.style.display = 'none';
+
+        let ctxType = '-', perm = '-';
+        try { ctxType = (liff.getContext() || {}).type || '-'; } catch (e) {}
+        try { if (liff.permission) perm = (await liff.permission.query('chat_message.write')).state; } catch (e) { perm = 'error'; }
+
+        let msg = '';
+        if (!liff.isInClient()) {
+            msg = 'ส่งเข้าแชทได้เฉพาะเมื่อเปิดฟอร์มจากในแอป LINE';
+        } else if (liff.isApiAvailable('sendMessages')) {
+            sendBtn.style.display = 'block';
+            return;
+        } else if (perm === 'prompt') {
+            permBtn.style.display = 'block';
+            msg = 'ต้องกดอนุญาตสิทธิ์ส่งข้อความก่อน แล้วปุ่มส่งสรุปจะขึ้น';
+        } else if (perm === 'unavailable') {
+            msg = 'LIFF นี้ยังไม่ได้เปิดสิทธิ์ chat_message.write ในคอนโซล (ติ๊กแล้วกด Update)';
+        } else if (!['utou', 'room', 'group'].includes(ctxType)) {
+            msg = 'ฟอร์มนี้ไม่ได้ถูกเปิดจากหน้าแชท ให้เปิดจากเมนูหรือปุ่มในแชทโดยตรง';
+        } else {
+            msg = 'ยังส่งเข้าแชทไม่ได้';
+        }
+        hint.textContent = `${msg} (เปิดจาก: ${ctxType} | สิทธิ์ส่งข้อความ: ${perm})`;
+        hint.style.display = 'block';
+    }
+
+    async function requestChatPermission() {
+        try { await liff.permission.requestAll(); } catch (e) { console.error('requestAll failed', e); }
+        await updateSendOptions();
     }
     async function copySummary() {
         const btn = document.getElementById('btn-copy');
