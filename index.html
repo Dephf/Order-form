@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>บันทึกออเดอร์ระบบภายใน</title>
+    <!-- LINE LIFF SDK สำหรับดึงชื่อพนักงานขาย -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 15px; background-color: #f7f9fa; color: #333; }
+        .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 550px; margin: 0 auto; }
+        h2 { text-align: center; color: #06C755; margin-top: 0; }
+        .form-group { margin-bottom: 15px; }
+        label, .label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 14px; }
+        input, select, textarea { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccd2d8; border-radius: 6px; font-size: 15px; background: #fff; }
+        input:focus, select:focus, textarea:focus { border-color: #06C755; outline: none; }
+
+        /* สวิตช์เลือกบริษัท 3 ปุ่ม */
+        .switch { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: #e9ecef; padding: 4px; border-radius: 8px; }
+        .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .switch label { margin: 0; padding: 11px 4px; text-align: center; font-size: 13px; font-weight: bold; color: #555; border-radius: 6px; cursor: pointer; line-height: 1.25; user-select: none; transition: background .15s, color .15s; }
+        .switch input:checked + label { background: #06C755; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        .switch input:focus-visible + label { outline: 2px solid #007bff; outline-offset: 1px; }
+
+        .product-item { background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px dashed #ccc; margin-bottom: 10px; position: relative; }
+        .btn-add { background-color: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; margin-bottom: 15px; font-size: 14px; }
+        .btn-remove { background-color: #dc3545; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; position: absolute; right: 10px; top: 10px; font-size: 12px; }
+
+        /* ชื่อสินค้าเต็มบรรทัดแรก ส่วนขนาด/ราคา/ปริมาณอยู่บรรทัดถัดมา */
+        .grid-4 { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 6px; margin-top: 5px; }
+        .grid-4 .product-name { grid-column: 1 / -1; }
+        .btn-submit { background-color: #06C755; color: white; padding: 12px; border: none; width: 100%; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        .btn-submit:hover { background-color: #05b04b; }
+        .btn-submit:disabled { background-color: #9bd9b4; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>📝 บันทึกยอดขายระบบภายใน</h2>
+
+    <div class="form-group">
+        <span class="label" id="company-label">เลือกบริษัท:</span>
+        <div class="switch" role="radiogroup" aria-labelledby="company-label">
+            <input type="radio" name="company" id="co-sun" value="Sun Crop Group" checked>
+            <label for="co-sun">Sun Crop Group</label>
+
+            <input type="radio" name="company" id="co-sc" value="SC Crop Care">
+            <label for="co-sc">SC Crop Care</label>
+
+            <input type="radio" name="company" id="co-nc" value="NC Agro Chem">
+            <label for="co-nc">NC Agro Chem</label>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="customer">ชื่อลูกค้า / ชื่อร้านค้า:</label>
+        <input type="text" id="customer" placeholder="ตัวอย่าง: ร้านทวีการเกษตร">
+    </div>
+
+    <span class="label">รายการสินค้า:</span>
+    <div id="product-container">
+        <div class="product-item" id="item-0">
+            <div class="grid-4">
+                <input type="text" class="product-name" placeholder="ชื่อสินค้า">
+                <input type="text" class="product-size" placeholder="ขนาด (e.g. 1x12ลิตร)">
+                <input type="number" class="product-price" placeholder="ราคาขาย" oninput="calculateTotalSales()">
+                <input type="number" class="product-qty" placeholder="ปริมาณ" oninput="calculateTotalSales()">
+            </div>
+        </div>
+    </div>
+    <button type="button" class="btn-add" onclick="addProductRow()">+ เพิ่มสินค้าอีกรายการ</button>
+
+    <div class="form-group">
+        <label for="sales">ยอดขายรวมทั้งหมด (บาท):</label>
+        <input type="number" id="sales" placeholder="คำนวณอัตโนมัติ" readonly style="background: #e9ecef;">
+    </div>
+
+    <div class="form-group">
+        <label for="credit">เครดิตลูกค้า (วัน):</label>
+        <select id="credit">
+            <option value="90">90 วัน</option>
+            <option value="60">60 วัน</option>
+            <option value="30">30 วัน</option>
+            <option value="0">เงินสด / ไม่มีเครดิต</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="price_list">ใบราคา (ลิงก์/เลขที่อ้างอิง):</label>
+        <input type="text" id="price_list" placeholder="ตัวอย่าง: เลขที่ใบราคา หรือ ลิงก์ใบเสนอราคา">
+    </div>
+
+    <div class="form-group">
+        <label for="note">หมายเหตุเพิ่มเติม:</label>
+        <textarea id="note" rows="2" placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)"></textarea>
+    </div>
+
+    <button class="btn-submit" id="btn-submit" onclick="sendOrderData()">บันทึกออเดอร์ลงระบบ</button>
+</div>
+
+<script>
+    let rowCount = 1;
+
+    // 1. เพิ่มแถวรายการสินค้า
+    function addProductRow() {
+        const container = document.getElementById('product-container');
+        const newRow = document.createElement('div');
+        newRow.className = 'product-item';
+        newRow.id = `item-${rowCount}`;
+        newRow.innerHTML = `
+            <button type="button" class="btn-remove" onclick="removeProductRow(${rowCount})">ลบ</button>
+            <div class="grid-4" style="margin-top: 15px;">
+                <input type="text" class="product-name" placeholder="ชื่อสินค้า">
+                <input type="text" class="product-size" placeholder="ขนาด (e.g. 1x12ลิตร)">
+                <input type="number" class="product-price" placeholder="ราคาขาย" oninput="calculateTotalSales()">
+                <input type="number" class="product-qty" placeholder="ปริมาณ" oninput="calculateTotalSales()">
+            </div>
+        `;
+        container.appendChild(newRow);
+        rowCount++;
+    }
+
+    // 2. ลบแถวรายการสินค้า
+    function removeProductRow(id) {
+        document.getElementById(`item-${id}`).remove();
+        calculateTotalSales();
+    }
+
+    // 3. คำนวณยอดขายรวม (ราคาขาย x ปริมาณ)
+    function calculateTotalSales() {
+        const prices = document.getElementsByClassName('product-price');
+        const qtys = document.getElementsByClassName('product-qty');
+        let total = 0;
+        for (let i = 0; i < prices.length; i++) {
+            const p = parseFloat(prices[i].value) || 0;
+            const q = parseFloat(qtys[i].value) || 0;
+            total += p * q;
+        }
+        document.getElementById('sales').value = total;
+    }
+
+    // 4. เชื่อมต่อ LINE LIFF
+    const liffReady = (async () => {
+        await liff.init({ liffId: "2012388912-BOzxL3Gh" });
+        if (!liff.isLoggedIn()) { liff.login(); }
+    })();
+
+    // 5. รวบรวมข้อมูลและส่งไป Google Sheets
+    async function sendOrderData() {
+        const company = document.querySelector('input[name="company"]:checked').value;
+        const customer = document.getElementById('customer').value.trim();
+        const sales = document.getElementById('sales').value;
+        const credit = document.getElementById('credit').value;
+        const priceList = document.getElementById('price_list').value;
+        const note = document.getElementById('note').value;
+
+        const names = document.getElementsByClassName('product-name');
+        const sizes = document.getElementsByClassName('product-size');
+        const prices = document.getElementsByClassName('product-price');
+        const qtys = document.getElementsByClassName('product-qty');
+        let items = [];
+
+        for (let i = 0; i < names.length; i++) {
+            if (names[i].value && sizes[i].value && prices[i].value && qtys[i].value) {
+                items.push(`${names[i].value} (ขนาด: ${sizes[i].value} | ราคา: ${prices[i].value} | ปริมาณ: ${qtys[i].value})`);
+            }
+        }
+
+        if (!customer || items.length === 0 || !sales) {
+            alert('กรุณากรอกข้อมูลร้านค้าและสินค้าให้ครบถ้วนก่อนบันทึกครับ');
+            return;
+        }
+
+        // รอรับชื่อพนักงานจาก LINE ให้สำเร็จก่อนส่งข้อมูล
+        let sellerName = "";
+        try {
+            await liffReady;
+            const profile = await liff.getProfile();
+            sellerName = profile.displayName;
+        } catch (err) {
+            console.error("getProfile failed", err);
+        }
+        if (!sellerName) {
+            alert('ไม่สามารถดึงชื่อ LINE ได้ กรุณาเปิดฟอร์มผ่าน LINE อีกครั้ง');
+            return;
+        }
+
+        const payload = {
+            company: company,
+            customer: customer,
+            product: items.join(', '),
+            sales: parseFloat(sales),
+            credit: parseInt(credit),
+            price_list: priceList,
+            note: note,
+            seller: sellerName
+        };
+
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw6PjBJoduy_Ou8q-iph9RaCqZnGP6moEUZo-W_k9STxueE7zBLHtkuj5260xsT6ai6/exec";
+
+        const btn = document.getElementById('btn-submit');
+        btn.disabled = true;
+        btn.textContent = 'กำลังบันทึก...';
+
+        fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.text())
+        .then(text => {
+            // รองรับทั้งกรณีหลังบ้านตอบเป็น JSON และเป็นข้อความธรรมดา
+            let data = null;
+            try { data = JSON.parse(text); } catch (e) {}
+
+            if (data && data.status === "error") {
+                alert('เกิดข้อผิดพลาดในการบันทึก: ' + (data.error || 'ไม่ทราบสาเหตุ'));
+                btn.disabled = false;
+                btn.textContent = 'บันทึกออเดอร์ลงระบบ';
+                return;
+            }
+            alert('บันทึกออเดอร์ลง Google Sheets เรียบร้อยแล้วครับ!');
+            if (liff.isInClient()) { liff.closeWindow(); } else { location.reload(); }
+        })
+        .catch(err => {
+            console.error("Fetch error:", err);
+            alert('ไม่ได้รับการยืนยันจากระบบหลังบ้าน กรุณาเช็กใน Google Sheet ก่อนกดบันทึกซ้ำ เพื่อไม่ให้ออเดอร์ซ้ำ');
+            btn.disabled = false;
+            btn.textContent = 'บันทึกออเดอร์ลงระบบ';
+        });
+    }
+</script>
+</body>
+</html>
