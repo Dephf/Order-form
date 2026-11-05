@@ -249,7 +249,7 @@
             btn.disabled = true;
         } catch (err) {
             console.error('sendMessages failed', err);
-            alert('ส่งเข้าแชทไม่ได้ ให้ใช้ปุ่มคัดลอกข้อความแทน');
+            alert('ส่งเข้าแชทไม่ได้ ให้ใช้ปุ่มคัดลอกข้อความแทน\n\nรายละเอียด: ' + (err && err.code ? err.code + ' - ' : '') + (err && err.message ? err.message : err));
         }
     }
     function finishForm() {
