@@ -112,11 +112,14 @@
     <pre id="summary-text" style="white-space: pre-wrap; word-break: break-word; background: #f8f9fa; border: 1px solid #e1e5e8; border-radius: 6px; padding: 12px; font-family: inherit; font-size: 14px; line-height: 1.5; margin: 0 0 12px;"></pre>
     <button class="btn-submit" id="btn-copy" style="margin-top: 0;" onclick="copySummary()">คัดลอกข้อความ</button>
     <button class="btn-submit" id="btn-send-chat" style="display: none; background-color: #007bff; margin-top: 10px;" onclick="sendSummaryToChat()">ส่งสรุปเข้าแชท</button>
+    <p id="send-hint" style="display: none; font-size: 13px; color: #888; margin: 10px 0 0;"></p>
     <button class="btn-submit" style="background-color: #6c757d; margin-top: 10px;" onclick="finishForm()">ปิด</button>
 </div>
 
 <script>
     let rowCount = 0;
+    // รหัสอ้างอิงของฟอร์มนี้ ใช้กันออเดอร์ซ้ำเวลากดบันทึกซ้ำ/ส่งซ้ำ
+    const REQUEST_ID = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2);
 
     // 1. เพิ่มแถวรายการสินค้า (แถวแรกสร้างอัตโนมัติ ไม่มีปุ่มลบ)
     function addProductRow() {
@@ -222,8 +225,14 @@
         document.getElementById('summary-text').textContent = text;
         document.getElementById('form-card').style.display = 'none';
         document.getElementById('result-card').style.display = 'block';
+        const hint = document.getElementById('send-hint');
         if (liff.isInClient() && liff.isApiAvailable('sendMessages')) {
             document.getElementById('btn-send-chat').style.display = 'block';
+        } else {
+            hint.style.display = 'block';
+            hint.textContent = liff.isInClient()
+                ? 'ส่งเข้าแชทยังไม่ได้: ยังไม่ได้เปิดสิทธิ์ chat_message.write ใน LIFF หรือยังไม่ได้กดอนุญาตสิทธิ์นี้ในแอป LINE'
+                : 'ส่งเข้าแชทได้เฉพาะเมื่อเปิดฟอร์มจากในแอป LINE';
         }
         window.scrollTo(0, 0);
     }
@@ -325,7 +334,8 @@
             credit: credit.startsWith("'") ? credit : "'" + credit, // ใส่ ' นำหน้า เพื่อให้ Sheet เก็บเป็นข้อความ เช่น '30/3%
             price_list: priceList,
             note: note,
-            seller: sellerName
+            seller: sellerName,
+            request_id: REQUEST_ID
         };
 
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw6PjBJoduy_Ou8q-iph9RaCqZnGP6moEUZo-W_k9STxueE7zBLHtkuj5260xsT6ai6/exec";
@@ -334,31 +344,43 @@
         btn.disabled = true;
         btn.textContent = 'กำลังบันทึก...';
 
-        fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        })
-        .then(res => res.text())
-        .then(async text => {
+        // ส่งข้อมูล ลองซ้ำอัตโนมัติ 1 ครั้งถ้าเครือข่ายสะดุด (หลังบ้านใช้ request_id กันออเดอร์ซ้ำ)
+        async function post() {
+            const res = await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            return res.text();
+        }
+
+        try {
+            let text;
+            try {
+                text = await post();
+            } catch (e) {
+                await new Promise(r => setTimeout(r, 1500));
+                text = await post();
+            }
+
             // รองรับทั้งกรณีหลังบ้านตอบเป็น JSON และเป็นข้อความธรรมดา
             let data = null;
             try { data = JSON.parse(text); } catch (e) {}
+            const failed = (data && data.status === "error") || /^Error/i.test(text.trim());
 
-            if (data && data.status === "error") {
-                alert('เกิดข้อผิดพลาดในการบันทึก: ' + (data.error || 'ไม่ทราบสาเหตุ'));
+            if (failed) {
+                alert('เกิดข้อผิดพลาดในการบันทึก: ' + ((data && data.error) || text));
                 btn.disabled = false;
                 btn.textContent = 'บันทึกออเดอร์ลงระบบ';
                 return;
             }
 
             showResult(summary);
-        })
-        .catch(err => {
+        } catch (err) {
             console.error("Fetch error:", err);
-            alert('ไม่ได้รับการยืนยันจากระบบหลังบ้าน กรุณาเช็กใน Google Sheet ก่อนกดบันทึกซ้ำ เพื่อไม่ให้ออเดอร์ซ้ำ');
+            alert('ไม่ได้รับการยืนยันจากระบบหลังบ้าน กรุณาเช็กใน Google Sheet ก่อนกดบันทึกซ้ำ');
             btn.disabled = false;
             btn.textContent = 'บันทึกออเดอร์ลงระบบ';
-        });
+        }
     }
 </script>
 </body>
