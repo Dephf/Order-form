@@ -47,7 +47,7 @@
 </head>
 <body>
 
-<div class="card">
+<div class="card" id="form-card">
     <h2>📝 บันทึกยอดขายระบบภายใน</h2>
 
     <div class="form-group">
@@ -105,6 +105,14 @@
     </div>
 
     <button class="btn-submit" id="btn-submit" onclick="sendOrderData()">บันทึกออเดอร์ลงระบบ</button>
+</div>
+
+<div class="card" id="result-card" style="display: none;">
+    <h2>✅ บันทึกเรียบร้อย</h2>
+    <pre id="summary-text" style="white-space: pre-wrap; word-break: break-word; background: #f8f9fa; border: 1px solid #e1e5e8; border-radius: 6px; padding: 12px; font-family: inherit; font-size: 14px; line-height: 1.5; margin: 0 0 12px;"></pre>
+    <button class="btn-submit" id="btn-copy" style="margin-top: 0;" onclick="copySummary()">คัดลอกข้อความ</button>
+    <button class="btn-submit" id="btn-send-chat" style="display: none; background-color: #007bff; margin-top: 10px;" onclick="sendSummaryToChat()">ส่งสรุปเข้าแชท</button>
+    <button class="btn-submit" style="background-color: #6c757d; margin-top: 10px;" onclick="finishForm()">ปิด</button>
 </div>
 
 <script>
@@ -207,6 +215,47 @@
         if (!liff.isLoggedIn()) { liff.login(); }
     })();
 
+    // หน้าสรุปหลังบันทึกสำเร็จ
+    let lastSummary = '';
+    function showResult(text) {
+        lastSummary = text;
+        document.getElementById('summary-text').textContent = text;
+        document.getElementById('form-card').style.display = 'none';
+        document.getElementById('result-card').style.display = 'block';
+        if (liff.isInClient() && liff.isApiAvailable('sendMessages')) {
+            document.getElementById('btn-send-chat').style.display = 'block';
+        }
+        window.scrollTo(0, 0);
+    }
+    async function copySummary() {
+        const btn = document.getElementById('btn-copy');
+        try {
+            await navigator.clipboard.writeText(lastSummary);
+        } catch (e) {
+            const ta = document.createElement('textarea');
+            ta.value = lastSummary;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); } catch (_) {}
+            ta.remove();
+        }
+        btn.textContent = 'คัดลอกแล้ว ✓';
+    }
+    async function sendSummaryToChat() {
+        const btn = document.getElementById('btn-send-chat');
+        try {
+            await liff.sendMessages([{ type: 'text', text: lastSummary }]);
+            btn.textContent = 'ส่งเข้าแชทแล้ว ✓';
+            btn.disabled = true;
+        } catch (err) {
+            console.error('sendMessages failed', err);
+            alert('ส่งเข้าแชทไม่ได้ ให้ใช้ปุ่มคัดลอกข้อความแทน');
+        }
+    }
+    function finishForm() {
+        if (liff.isInClient()) { liff.closeWindow(); } else { location.reload(); }
+    }
+
     // 5. รวบรวมข้อมูลและส่งไป Google Sheets
     async function sendOrderData() {
         const company = document.querySelector('input[name="company"]:checked').value;
@@ -254,6 +303,20 @@
             return;
         }
 
+        // ข้อความสรุปที่จะแสดงในหน้าสรุปหลังบันทึก
+        const summary = [
+            '✅ บันทึกออเดอร์เรียบร้อย',
+            `บริษัท: ${company}`,
+            `ลูกค้า: ${customer}`,
+            'รายการสินค้า:',
+            items.join('\n'),
+            `ยอดรวม: ${Number(sales).toLocaleString('th-TH')} บาท`,
+            `เครดิต: ${credit}`,
+            priceList ? `ใบราคา: ${priceList}` : '',
+            note ? `หมายเหตุ: ${note}` : '',
+            `พนักงานขาย: ${sellerName}`
+        ].filter(Boolean).join('\n');
+
         const payload = {
             company: company,
             customer: customer,
@@ -288,30 +351,7 @@
                 return;
             }
 
-            // ส่งข้อความสรุปออเดอร์กลับเข้าแชท LINE
-            const summary = [
-                '✅ บันทึกออเดอร์เรียบร้อย',
-                `บริษัท: ${company}`,
-                `ลูกค้า: ${customer}`,
-                'รายการสินค้า:',
-                items.join('\n'),
-                `ยอดรวม: ${Number(sales).toLocaleString('th-TH')} บาท`,
-                `เครดิต: ${credit}`,
-                priceList ? `ใบราคา: ${priceList}` : '',
-                note ? `หมายเหตุ: ${note}` : '',
-                `พนักงานขาย: ${sellerName}`
-            ].filter(Boolean).join('\n');
-
-            try {
-                if (liff.isInClient() && liff.isApiAvailable('sendMessages')) {
-                    await liff.sendMessages([{ type: 'text', text: summary }]);
-                }
-            } catch (err) {
-                console.error('sendMessages failed', err); // ส่งสรุปไม่ได้ไม่ถือว่าบันทึกล้มเหลว
-            }
-
-            alert('บันทึกออเดอร์ลง Google Sheets เรียบร้อยแล้วครับ!');
-            if (liff.isInClient()) { liff.closeWindow(); } else { location.reload(); }
+            showResult(summary);
         })
         .catch(err => {
             console.error("Fetch error:", err);
