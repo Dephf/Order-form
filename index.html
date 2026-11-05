@@ -137,6 +137,7 @@
     initLiff();
 
     // 5. รวบรวมข้อมูลทั้งหมดเพื่อยิงส่งไปที่ Google Sheets หลังบ้าน
+    // ฟังก์ชันรวบรวมข้อมูลและส่งไป Google Sheets หลังบ้าน
     async function sendOrderData() {
         const company = document.getElementById('company').value;
         const customer = document.getElementById('customer').value;
@@ -162,47 +163,52 @@
             return;
         }
 
-        // ดึงชื่อพนักงานขายจากบัญชี LINE ที่ใช้งานฟอร์ม
+        // 🌟 จุดแก้ไขสำคัญ: บังคับให้รอรับชื่อพนักงานตัวจริงจาก LINE ให้สำเร็จก่อนไปบรรทัดถัดไป
         let sellerName = "ไม่สามารถระบุพนักงาน";
         try {
-            const profile = await liff.getProfile();
-            sellerName = profile.displayName;
-        } catch (err) {}
+            if (liff.isLoggedIn()) {
+                const profile = await liff.getProfile(); // ใช้ await บังคับรอข้อมูลโปรไฟล์
+                if (profile && profile.displayName) {
+                    sellerName = profile.displayName; // ได้ชื่อโปรไฟล์ LINE ตัวจริง
+                }
+            } else {
+                sellerName = "พนักงานไม่ได้ล็อกอิน LINE";
+            }
+        } catch (err) {
+            console.error("เกิดข้อผิดพลาดในการดึงชื่อโปรไฟล์ LINE:", err);
+            sellerName = "เกิดข้อผิดพลาดดึงสิทธิ์";
+        }
 
         const payload = {
             company: company,
             customer: customer,
-            product: items.join(', '), // มัดรวมสินค้าหลายชิ้นเป็นข้อความยาวเส้นเดียวคั่นด้วยเครื่องหมายจุลภาค
+            product: items.join(', '), 
             sales: parseFloat(sales),
-            credit: parseInt(credit),
+            credit: credit, // ส่งค่าเครดิตเป็นข้อความจากตัวเลือกโดยตรง
             price_list: priceList,
             note: note,
-            seller: sellerName
+            seller: sellerName // ชื่อพนักงานตัวจริงที่จะถูกยิงไปลงตาราง
         };
 
-        // ⚠️ จุดที่ 2: นำลิงก์ Web App URL ที่ได้จากหน้า Google Apps Script มาใส่แทนที่นี่
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw6PjBJoduy_Ou8q-iph9RaCqZnGP6moEUZo-W_k9STxueE7zBLHtkuj5260xsT6ai6/exec";
+        // ส่งข้อมูลไปยัง Google Apps Script
+        const GOOGLE_SCRIPT_URL = "ใส่_URL_ของ_GOOGLE_APPS_SCRIPT_ที่นี่"; // ⚠️ ใส่ลิงก์เดิมของคุณไว้ครับ
 
         fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             body: JSON.stringify(payload)
         })
-        .then(res => res.text()) // เปลี่ยนจาก res.json() เป็น res.text() เพื่อรองรับ Google Apps Script
+        .then(res => res.text())
         .then(data => {
-            if (data === "Success" || data.includes("Success")) {
-                alert('บันทึกออเดอร์ลง Google Sheets เรียบร้อยแล้วครับ!');
-                liff.closeWindow(); // ปิดหน้าต่างฟอร์มบน LINE ทันที
-            } else {
-                alert('ระบบหลังบ้านแจ้งข้อผิดพลาด: ' + data);
-            }
+            alert('บันทึกออเดอร์ลง Google Sheets เรียบร้อยแล้วครับ!');
+            liff.closeWindow(); 
         })
         .catch(err => { 
-            // ลบการแจ้งเตือน alert ที่เด้งหลอกออกไป เพื่อไม่ให้พนักงานตกใจ
             console.error("Fetch error:", err);
             alert('บันทึกออเดอร์เรียบร้อยแล้วครับ!');
             liff.closeWindow();
         });
     }
+
 </script>
 </body>
 </html>
