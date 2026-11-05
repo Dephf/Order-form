@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>บันทึกออเดอร์ระบบภายใน</title>
     <!-- เรียกใช้งาน LINE LIFF SDK สำหรับดึงชื่อพนักงานขาย -->
-    <script src="https://line-scdn.net"></script>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 15px; background-color: #f7f9fa; color: #333; }
         .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 550px; margin: 0 auto; }
@@ -127,14 +127,10 @@
     }
 
     // 4. เชื่อมต่อระบบ LINE LIFF 
-    async function initLiff() {
-        try {
-            // ⚠️ จุดที่ 1: นำ LIFF ID จากหน้า LINE Login คอนโซลมาใส่แทนที่นี่
-            await liff.init({ liffId: "2012388912-BOzxL3Gh" });
-            if (!liff.isLoggedIn()) { liff.login(); }
-        } catch (error) { console.error("LIFF failed", error); }
-    }
-    initLiff();
+    const liffReady = (async () => {
+        await liff.init({ liffId: "2012388912-BOzxL3Gh" });
+        if (!liff.isLoggedIn()) { liff.login(); }
+    })();
 
     // 5. รวบรวมข้อมูลทั้งหมดเพื่อยิงส่งไปที่ Google Sheets หลังบ้าน
     // ฟังก์ชันรวบรวมข้อมูลและส่งไป Google Sheets หลังบ้าน
@@ -164,19 +160,17 @@
         }
 
         // 🌟 จุดแก้ไขสำคัญ: บังคับให้รอรับชื่อพนักงานตัวจริงจาก LINE ให้สำเร็จก่อนไปบรรทัดถัดไป
-        let sellerName = "ไม่สามารถระบุพนักงาน";
+        let sellerName = "";
         try {
-            if (liff.isLoggedIn()) {
-                const profile = await liff.getProfile(); // ใช้ await บังคับรอข้อมูลโปรไฟล์
-                if (profile && profile.displayName) {
-                    sellerName = profile.displayName; // ได้ชื่อโปรไฟล์ LINE ตัวจริง
-                }
-            } else {
-                sellerName = "พนักงานไม่ได้ล็อกอิน LINE";
-            }
+            await liffReady;
+            const profile = await liff.getProfile();
+            sellerName = profile.displayName;
         } catch (err) {
-            console.error("เกิดข้อผิดพลาดในการดึงชื่อโปรไฟล์ LINE:", err);
-            sellerName = "เกิดข้อผิดพลาดดึงสิทธิ์";
+            console.error("getProfile failed", err);
+        }
+        if (!sellerName) {
+            alert('ไม่สามารถดึงชื่อ LINE ได้ กรุณาเปิดฟอร์มผ่าน LINE อีกครั้ง');
+            return;
         }
 
         const payload = {
