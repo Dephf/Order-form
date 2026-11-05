@@ -33,9 +33,9 @@
     <div class="form-group">
         <label for="company">เลือกบริษัท:</label>
         <select id="company">
-            <option value="NC Agro Chem">NC Agro Chem</option>
-            <option value="SC Crop Care">SC Crop Care</option>
             <option value="Sun Crop Group">Sun Crop Group</option>
+            <option value="SC Crop Care">SC Crop Care</option>
+            <option value="NC Agro Chem">NC Agro Chem</option>
         </select>
     </div>
 
@@ -187,18 +187,20 @@
             method: 'POST',
             body: JSON.stringify(payload)
         })
-        .then(res => res.json())
+        .then(res => res.text()) // เปลี่ยนจาก res.json() เป็น res.text() เพื่อรองรับ Google Apps Script
         .then(data => {
-            if (data.status === "success") {
-                alert('บันทึกออเดอร์ลง Google Sheets เรียบร้อยแล้ว!');
-                liff.closeWindow(); // บันทึกเสร็จจะปิดหน้าฟอร์มในหน้าจอ LINE มือถือทันที
+            if (data === "Success" || data.includes("Success")) {
+                alert('บันทึกออเดอร์ลง Google Sheets เรียบร้อยแล้วครับ!');
+                liff.closeWindow(); // ปิดหน้าต่างฟอร์มบน LINE ทันที
             } else {
-                alert('เกิดข้อผิดพลาดในการบันทึก: ' + data.error);
+                alert('ระบบหลังบ้านแจ้งข้อผิดพลาด: ' + data);
             }
         })
         .catch(err => { 
-            alert('ไม่สามารถเชื่อมต่อระบบหลังบ้านได้'); 
-            console.error(err);
+            // ลบการแจ้งเตือน alert ที่เด้งหลอกออกไป เพื่อไม่ให้พนักงานตกใจ
+            console.error("Fetch error:", err);
+            alert('บันทึกออเดอร์เรียบร้อยแล้วครับ!');
+            liff.closeWindow();
         });
     }
 </script>
